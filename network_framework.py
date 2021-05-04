@@ -6,19 +6,45 @@ from tensorflow.keras import Model, regularizers
 
 import numpy as np
 import tensorflow as tf
-
 from convolution import *
+from additivepooling import *
 
+(X_train, y_train), (X_test, y_test) = mnist.load_data()
+X_train = X_train.astype('float32')
+X_test = X_test.astype('float32')
+X_train /= 255
+X_test /= 255
+			
+y_train = to_categorical(y_train, 10)
+y_test = to_categorical(y_test, 10)
 
-# the model would be defined here, with a Conv2D layer
-output = concatenate([c0, c1, c2, c3])
-dropout = output
-lc = Tea(units=64, name='tea_2')(dropout)
-cl = AdditivePooling(8)(lc)
-predictions = Activation('softmax')(cl)
+inputs = Input(shape=(28,28,1))
+			
+conv = Conv2D(filters=20,
+			  kernel_size=(11,11),
+			  strides=(1,1),
+			  activation='relu',
+			  kernel_regularizer=regularizers.l1(l=0.1),
+			  use_bias=True,
+			  )(inputs)
+
+flattened_inputs = Flatten()(conv)
+
+network = AdditivePooling(10)(flattened_inputs)
+
+predictions = Activation('softmax')(network)
+
 model = Model(inputs=inputs, outputs=predictions)
-model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-model.fit(x_train, y_train, batch_size=batchSize, epochs=epochs, verbose=1, validation_split=0.0)
+
+model.compile(loss='categorical_crossentropy', optimizer=Adam(), metrics=['accuracy'])
+
+X_train = X_train.reshape(-1, 28, 28, 1)
+X_test = X_test.reshape(-1, 28, 28, 1)
+
+model.fit(X_train, y_train, batch_size=128, epochs=10, verbose=1, validation_split=0.2)
+
+score = model.evaluate(X_test, y_test, verbose=0)
+
 
 
 # this call constrains convolution kernel weights to ternary values: -1, 0, or 1.
@@ -31,9 +57,9 @@ model.set_weights(constrained_weights)
 print("Post-Ternary Constraint Accuracy: ")
 
 # Evaluate the constained weight model
-score = model.evaluate(x_test, y_test, verbose=0)
+score = model.evaluate(X_test, y_test, verbose=0)
 
-test_predictions = model.predict(x_test)
+test_predictions = model.predict(X_test)
 
 print("Test Loss: ", score[0])
 print("Test Accuracy: ", score[1])
@@ -44,12 +70,17 @@ model.set_weights(orig_weights)
 print("Original Floating-Point Accuracy: ")
 
 # Evaluate the original, floating-point weight model
-float_score = model.evaluate(x_test, y_test, verbose=0)
+float_score = model.evaluate(X_test, y_test, verbose=0)
 
 print("Test Loss: ", float_score[0])
 print("Test Accuracy: ", float_score[1])
 
 print("Accuracy loss due to train-then-constrain: " ,float_score[1] - score[1])
 
-# Set the weights back to the constrained/rounded versions so we can export them to the simulator
+
 model.set_weights(constrained_weights)
+
+#view_weights = model.get_weights()
+#names = [weight.name for layer in model.layers for weight in layer.weights]
+#print(view_weights)
+#print(names)

@@ -5,7 +5,6 @@ import tensorflow as tf
 import numpy as np
 import copy
 import math
-from scipy import signal
 
 # From Imports:
 from tensorflow.keras import layers, activations, initializers, regularizers, constraints, Model
@@ -49,7 +48,9 @@ class CWTConv2D(layers.Layer) :
 			# conduct convolution in Python as a reference and to check result later
 			for filter in range(self.filters) :
 				#result.append(signal.convolve2d(inputs, np.fliplr(np.flipud(kernel[filter])), mode='valid'))
-				output = np.append(signal.convolve2d(inputs, kernel[filter], mode='valid'))
+				#output = np.append(signal.convolve2d(inputs, kernel[filter], mode='valid'))
+				#output = np.zeros(inputs)
+				1
 			
 			biases = tf.keras.backend.round(self.biases)
 			
@@ -73,9 +74,24 @@ def constrain_weights(model) :
 	layer_num = -1
 	for weight, name in zip(weights, names):
 		layer_num += 1
-		data_type = name.split('/')[1]
 
-		if 'kernel' in data_type:	
+		if 'conv2d/kernel' in name:	
+			old_shape = weight.shape
+			flattened_weights = weight.flatten()
+			absolute_weights = np.absolute(flattened_weights)
+			mean = np.mean(absolute_weights)
+			for i in range(len(flattened_weights)) :
+				if (flattened_weights[i] > mean) :
+					flattened_weights[i] = 1
+				elif (flattened_weights[i] < -1 * mean) :
+					flattened_weights[i] = -1
+				else :
+					flattened_weights[i] = 0
+			weight = flattened_weights.reshape(old_shape)
+			weights[layer_num] = weight
+			
+			
+		if 'conv2d/bias' in name:	
 			old_shape = weight.shape
 			flattened_weights = weight.flatten()
 			absolute_weights = np.absolute(flattened_weights)
