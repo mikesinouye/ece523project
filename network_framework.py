@@ -4,22 +4,29 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras import Model, regularizers
 
+from skimage.filters import threshold_otsu
+
 import numpy as np
 import tensorflow as tf
 from convolution import *
 from additivepooling import *
 
 (X_train, y_train), (X_test, y_test) = mnist.load_data()
-X_train = X_train.astype('float32')
-X_test = X_test.astype('float32')
-X_train /= 255
-X_test /= 255
+
+for i in np.arange(len(X_train)):
+  thresh = threshold_otsu(X_train[i])
+  X_train[i] = X_train[i] > thresh
+
+for i in np.arange(len(X_test)):
+  thresh = threshold_otsu(X_test[i])
+  X_test[i] = X_test[i] > thresh
 			
 y_train = to_categorical(y_train, 10)
 y_test = to_categorical(y_test, 10)
 
 inputs = Input(shape=(28,28,1))
 			
+'''
 conv = Conv2D(filters=20,
 			  kernel_size=(11,11),
 			  strides=(1,1),
@@ -27,6 +34,15 @@ conv = Conv2D(filters=20,
 			  kernel_regularizer=regularizers.l1(l=0.1),
 			  use_bias=True,
 			  )(inputs)
+'''
+
+conv = CWTConv2D(filters=20,
+				  kernel_size=(11,11),
+				  strides=(1,1),
+				  #activation='relu',
+				  #kernel_regularizer=regularizers.l1(l=0.1),
+				  #use_bias=True,
+				  )(inputs)
 
 flattened_inputs = Flatten()(conv)
 
@@ -84,3 +100,5 @@ model.set_weights(constrained_weights)
 #names = [weight.name for layer in model.layers for weight in layer.weights]
 #print(view_weights)
 #print(names)
+
+model.summary()

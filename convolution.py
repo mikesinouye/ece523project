@@ -9,55 +9,69 @@ import math
 # From Imports:
 from tensorflow.keras import layers, activations, initializers, regularizers, constraints, Model
 
-
 class CWTConv2D(layers.Layer) :
 	
-	def __init__(self, kernel, filters, stride, **kwargs):
+	def __init__(self, filters, kernel_size, strides, **kwargs):
 		super(CWTConv2D, self).__init__(**kwargs)
 		
-		self.kernel = kernel
 		self.filters = filters
-		self.stride = stride
+		self.kernel_size = kernel_size
+		self.strides = strides
 
 	def build(self, input_shape):
 		
-		super(CWTConv2D, self).build(input_shape)
-											  
 		self.kernel = self.add_weight(name='kernel',
-										   shape=(filters, kernel[0], kernel[1]),
-										   initializer=initializers.TruncatedNormal(mean=0.5))
+										   shape=(self.kernel_size[0], self.kernel_size[1], input_shape[-1], self.filters),
+										   initializer='normal',
+										   trainable=True)
 
 		self.biases = self.add_weight(name='biases',
-										  shape=(filters, kernel[0], kernel[1]),
-										  initializer='zeros')
+										  shape=(self.filters),
+										  initializer='zeros',
+										  trainable=True)
+										  
+		super(CWTConv2D, self).build(input_shape)
 										  
 	def call(self, inputs):
 	
-		with tf.compat.v1.get_default_graph().gradient_override_map({"Round":"CustomRound"}):
+		#with tf.compat.v1.get_default_graph().gradient_override_map({"Round":"CustomRound"}):
 		
-			inputs = tf.keras.backend.round(inputs)
-			kernel = self.kernel
-			kernel = tf.keras.backend.round(kernel)
-			kernel = tf.keras.backend.clip(kernel, -1, 1)
-			
-			
-			# Multiply Connections with Weights:
-			weighted_connections = kernel * self.static_weights
-			
-			
-			# conduct convolution in Python as a reference and to check result later
-			for filter in range(self.filters) :
-				#result.append(signal.convolve2d(inputs, np.fliplr(np.flipud(kernel[filter])), mode='valid'))
-				#output = np.append(signal.convolve2d(inputs, kernel[filter], mode='valid'))
-				#output = np.zeros(inputs)
-				1
-			
-			biases = tf.keras.backend.round(self.biases)
-			
-			output = tf.keras.backend.bias_add(output, biases, data_format='channels_last')
-			
-			output = tf.keras.backend.in_train_phase(self.activation(output), 
-                                                     tf.dtypes.cast(tf.math.greater_equal(output, 0.0), tf.float32))
+		#inputs = tf.keras.backend.round(inputs)
+		#kernel = self.kernel
+		#kernel = tf.keras.backend.round(kernel)
+		#kernel = tf.keras.backend.clip(kernel, -1, 1)
+		'''
+		for x in range(inputs.shape[0] - kernel.shape[0] + 1) :
+			for y in range(inputs.shape[1] - kernel.shape[1] + 1) :
+				for f in range(kernel.shape[3]) :
+					tf.keras.backend.dot(inputs, kernel)
+		'''
+		output = tf.keras.backend.conv2d(inputs, kernel=self.kernel, strides=self.strides, padding='valid', data_format="channels_last")
+		#return tf.keras.backend.sum(outputs, self.biases)
+		return tf.keras.backend.bias_add(output, self.biases, data_format='channels_last')
+		
+		# Multiply Connections with Weights:
+		weighted_connections = kernel * self.static_weights
+		
+		
+		# conduct convolution in Python as a reference and to check result later
+		for filter in range(self.filters) :
+			#result.append(signal.convolve2d(inputs, np.fliplr(np.flipud(kernel[filter])), mode='valid'))
+			#output = np.append(signal.convolve2d(inputs, kernel[filter], mode='valid'))
+			#output = np.zeros(inputs)
+			1
+		
+		biases = tf.keras.backend.round(self.biases)
+		
+		output = tf.keras.backend.bias_add(output, biases, data_format='channels_last')
+		
+		output = tf.keras.backend.in_train_phase(self.activation(output), 
+												 tf.dtypes.cast(tf.math.greater_equal(output, 0.0), tf.float32))
+												 
+	def compute_output_shape(self, input_shape):
+		
+		
+		return (inputs.shape[0] - kernel.shape[0] + 1, inputs.shape[1] - kernel.shape[1] + 1, kernel.shape[3])
 	
 
 # rounds a Keras Conv2D layer's weights to a ternary value (-1, 0, 1) to 
