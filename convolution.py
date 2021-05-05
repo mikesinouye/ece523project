@@ -13,29 +13,31 @@ from tensorflow.keras import layers, activations, initializers, regularizers, co
 def custom_round(x):
 	output = tf.keras.backend.round(x)
 	def grad(dy):
-		return dy
+		return dy#*(tf.keras.backend.maximum(0*x, 1-2*tf.keras.backend.abs(x-0.5)) + tf.keras.backend.maximum(0*x, 1-2*tf.keras.backend.abs(x+0.5)))
 	return output, grad
 
 class CWTConv2D(layers.Layer) :
 	
-	def __init__(self, filters, kernel_size, strides, **kwargs):
+	def __init__(self, filters, kernel_size, strides, use_bias=True, **kwargs):
 		super(CWTConv2D, self).__init__(**kwargs)
 		
 		self.filters = filters
 		self.kernel_size = kernel_size
 		self.strides = strides
+		self.use_bias = use_bias
 
 	def build(self, input_shape):
 		
 		self.kernel = self.add_weight(name='kernel',
 										   shape=(self.kernel_size[0], self.kernel_size[1], input_shape[-1], self.filters),
-										   initializer='normal',
+										   initializer=initializers.RandomNormal(mean=0.0, stddev=0.5, seed=0),
 										   trainable=True)
 
-		self.biases = self.add_weight(name='biases',
-										  shape=(self.filters),
-										  initializer='zeros',
-										  trainable=True)
+		if (self.use_bias) :							   
+			self.biases = self.add_weight(name='biases',
+											  shape=(self.filters),
+											  initializer='zeros',
+											  trainable=True)
 										  
 		super(CWTConv2D, self).build(input_shape)
 										  
@@ -50,29 +52,30 @@ class CWTConv2D(layers.Layer) :
 		
 		kernel = tf.keras.backend.clip(kernel, -1, 1)
 		
-		biases = self.biases
-		
-		#biases = tf.keras.backend.round(biases)
-		biases = custom_round(biases)
-		
-		biases = tf.keras.backend.clip(biases, -128, 127)
-		
 		output = tf.keras.backend.conv2d(inputs, kernel=kernel, strides=self.strides, padding='valid', data_format="channels_last")
 		
-		output = tf.keras.backend.bias_add(output, biases, data_format='channels_last')
+		if (self.use_bias) :
+			biases = self.biases
+			
+			#biases = tf.keras.backend.round(biases)
+			biases = custom_round(biases)
+			
+			biases = tf.keras.backend.clip(biases, -128, 127)
+			
+			output = tf.keras.backend.bias_add(output, biases, data_format='channels_last')
 		
-		#output = tf.keras.backend.in_train_phase(activations.sigmoid(output), tf.dtypes.cast(tf.math.greater_equal(output, 0.0), tf.float32))
+		output = tf.keras.backend.in_train_phase(activations.sigmoid(output), tf.dtypes.cast(tf.math.greater_equal(output, 0.0), tf.float32))
 		
-		output = tf.keras.backend.clip(output, 0, 1)
+		#output = tf.keras.backend.clip(output, 0, 1)
 		
 		#output = tf.keras.backend.round(output)
-		output = custom_round(output)
+		#output = custom_round(output)
 		
 		return output
 												 
 	def compute_output_shape(self, input_shape):
 		
-		return (inputs.shape[0] - kernel.shape[0] + 1, inputs.shape[1] - kernel.shape[1] + 1, kernel.shape[3])
+		return ((inputs.shape[0] - self.kernel_size[0])/self.strides[0] + 1, (inputs.shape[1] - self.kernel_size[1])/self.strides[1] + 1, self.filters)
 	
 
 # custom cwt constrain function
@@ -95,7 +98,7 @@ def constrain_weights_cwt(model) :
 			
 		if 'cwt' in name and 'bias' in name:	
 			weight = tf.keras.backend.round(weight)
-			weight = tf.keras.backend.clip(weight, -127, 128)
+			weight = tf.keras.backend.clip(weight, -128, 127)
 			weights[layer_num] = weight
 			
 	return orig_weights, weights
@@ -152,7 +155,7 @@ def print_weights(model) :
 	view_weights = model.get_weights()
 	names = [weight.name for layer in model.layers for weight in layer.weights]
 	for weight, name in zip(view_weights, names) :
-		if 'cwt' in name and 'kernel' in name:	
+		if 'kernel' in name:	
 			print(name + " weights: ")
 			print(weight.shape)
 			print_weights = weight
@@ -169,6 +172,6 @@ def print_weights(model) :
 		print("Next Filter: ")
 		
 	for weight, name in zip(view_weights, names) :
-		if 'cwt' in name and 'bias' in name:	
+		if 'bias' in name:	
 			print(name + " weights : ")
 			print(weight)

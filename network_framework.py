@@ -8,10 +8,27 @@ from skimage.filters import threshold_otsu
 
 import numpy as np
 import tensorflow as tf
+
 from convolution import *
 from additivepooling import *
+from tea import *
+
+
+
+### CHANGE THESE ####
+cwt = False
+dump_weights = True
+### CHANGE THESE ####
+
+
+
+if (cwt) :
+	epochs = 100
+else :
+	epochs = 25
 
 (X_train, y_train), (X_test, y_test) = mnist.load_data()
+
 
 for i in np.arange(len(X_train)):
   thresh = threshold_otsu(X_train[i])
@@ -20,33 +37,44 @@ for i in np.arange(len(X_train)):
 for i in np.arange(len(X_test)):
   thresh = threshold_otsu(X_test[i])
   X_test[i] = X_test[i] > thresh
-			
+
+'''
+X_train = X_train / 255.0
+X_test  = X_test  / 255.0
+'''	
+	
 y_train = to_categorical(y_train, 10)
 y_test = to_categorical(y_test, 10)
 
 inputs = Input(shape=(28,28,1))
 			
-'''
-conv = Conv2D(filters=20,
-			  kernel_size=(11,11),
-			  strides=(1,1),
-			  activation='relu',
-			  kernel_regularizer=regularizers.l1(l=0.1),
-			  use_bias=True,
-			  )(inputs)
-'''
 
-conv = CWTConv2D(filters=20,
+if (cwt) :
+	conv = CWTConv2D(filters=15,
+					  kernel_size=(11,11),
+					  strides=(1,1),
+					  use_bias=True,
+					  )(inputs)
+					  
+	dropout = Dropout(0.5)(conv)
+
+else :
+	conv = Conv2D(filters=15,
 				  kernel_size=(11,11),
 				  strides=(1,1),
-				  #activation='relu',
+				  activation='relu',
 				  #kernel_regularizer=regularizers.l1(l=0.1),
-				  #use_bias=True,
+				  use_bias=True,
 				  )(inputs)
+				  
+	dropout = Dropout(0.0)(conv)
 
-flattened_inputs = Flatten()(conv)
 
-network = AdditivePooling(10)(flattened_inputs)
+flattened_conv = Flatten()(dropout)
+
+lc = Tea(units=120, name='tea_2')(flattened_conv)
+
+network = AdditivePooling(10)(lc)
 
 predictions = Activation('softmax')(network)
 
@@ -59,7 +87,7 @@ model.summary()
 X_train = X_train.reshape(-1, 28, 28, 1)
 X_test = X_test.reshape(-1, 28, 28, 1)
 
-model.fit(X_train, y_train, batch_size=128, epochs=75, verbose=1, validation_split=0.2)
+model.fit(X_train, y_train, batch_size=128, epochs=epochs, verbose=1, validation_split=0.2)
 
 score = model.evaluate(X_test, y_test, verbose=0)
 
@@ -68,7 +96,12 @@ score = model.evaluate(X_test, y_test, verbose=0)
 # this call constrains convolution kernel weights to ternary values: -1, 0, or 1.
 # we use a statistical method to round the weights to -1, 0,or 1, incurring some accuracy penalty.
 
-orig_weights, constrained_weights = constrain_weights_cwt(model)
+if (cwt) :
+	orig_weights, constrained_weights = constrain_weights_cwt(model)
+else :
+	orig_weights, constrained_weights = constrain_weights(model)
+
+
 model.set_weights(constrained_weights)
 		
 
@@ -93,16 +126,16 @@ float_score = model.evaluate(X_test, y_test, verbose=0)
 print("Test Loss: ", float_score[0])
 print("Test Accuracy: ", float_score[1])
 
-print("Accuracy loss due to train-then-constrain: " ,float_score[1] - score[1])
+print("Accuracy loss due to train-then-constrain: " , float_score[1] - score[1])
 
 
-#view_weights = model.get_weights()
-#names = [weight.name for layer in model.layers for weight in layer.weights]
-#print(view_weights)
-#print(names)
+if (dump_weights) :
+	names = [weight.name for layer in model.layers for weight in layer.weights]
+	print(names)
+	
+	model.set_weights(orig_weights)
+	print_weights(model)
 
-print_weights(model)
-
-model.set_weights(constrained_weights)
-
-print_weights(model)
+	model.set_weights(constrained_weights)
+	print_weights(model)
+	
