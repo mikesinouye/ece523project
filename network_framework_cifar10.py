@@ -1,5 +1,5 @@
-from tensorflow.keras.layers import Flatten, Activation, Input, Lambda, concatenate, Dropout, Conv2D
-from tensorflow.keras.datasets import mnist
+from tensorflow.keras.layers import Flatten, Activation, Input, Lambda, concatenate, Dropout, Conv2D, MaxPooling2D
+from tensorflow.keras.datasets import cifar10
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras import Model, regularizers
@@ -16,8 +16,8 @@ from tea import *
 
 
 ### CHANGE THESE ####
-cwt = False
-dump_weights = True
+cwt = True
+dump_weights = False
 ### CHANGE THESE ####
 
 
@@ -25,52 +25,62 @@ dump_weights = True
 if (cwt) :
 	epochs = 100
 else :
-	epochs = 25
+	epochs = 100
 
-(X_train, y_train), (X_test, y_test) = mnist.load_data()
+(X_train, y_train), (X_test, y_test) = cifar10.load_data()
 
-
-for i in np.arange(len(X_train)):
-  thresh = threshold_otsu(X_train[i])
-  X_train[i] = X_train[i] > thresh
-
-for i in np.arange(len(X_test)):
-  thresh = threshold_otsu(X_test[i])
-  X_test[i] = X_test[i] > thresh
-
-'''
-X_train = X_train / 255.0
-X_test  = X_test  / 255.0
-'''	
+X_train = opt_thresh_color_three(X_train)
+X_test = opt_thresh_color_three(X_test)
 	
 y_train = to_categorical(y_train, 10)
 y_test = to_categorical(y_test, 10)
 
-inputs = Input(shape=(28,28,1))
+inputs = Input(shape=(32,32,3))
 			
 
 if (cwt) :
-	conv = CWTConv2D(filters=15,
-						kernel_size=(11,11),
-						strides=(1,1),
-						use_bias=True,
-						)(inputs)
-					  
-	dropout = Dropout(0.5)(conv)
-
-else :
-	conv = Conv2D(filters=15,
+	conv1 = CWTConv2D(filters=10,
 					kernel_size=(11,11),
 					strides=(1,1),
-					activation='relu',
-					#kernel_regularizer=regularizers.l1(l=0.1),
 					use_bias=True,
 					)(inputs)
-				  
-	dropout = Dropout(0.0)(conv)
+								
+	pool1 = CWTMaxPooling2D(pool_size=(2,2), strides=(2,2))(conv1)
+	
+	drop1 = Dropout(0.5)(pool1)
+					
+	conv2 = CWTConv2D(filters=20,
+					kernel_size=(5,5),
+					strides=(1,1),
+					use_bias=True,
+					)(pool1)
+					
+	pool2 = CWTMaxPooling2D(pool_size=(2,2), strides=(2,2))(conv2)
+	
+	conv_output = Dropout(0.5)(pool2)
+
+else :
+	conv1 = Conv2D(filters=10,
+					kernel_size=(5,5),
+					strides=(1,1),
+					activation='relu',
+					use_bias=True,
+					)(inputs)
+					
+					
+	pool1 = MaxPooling2D(pool_size=(2,2), strides=(2,2))(conv1)
+					
+	conv2 = Conv2D(filters=20,
+					kernel_size=(3,3),
+					strides=(1,1),
+					activation='relu',
+					use_bias=True,
+					)(pool1)
+					
+	conv_output = MaxPooling2D(pool_size=(2,2), strides=(2,2))(conv2)
 
 
-flattened_conv = Flatten()(dropout)
+flattened_conv = Flatten()(conv_output)
 
 lc = Tea(units=120, name='tea_2')(flattened_conv)
 
@@ -84,8 +94,8 @@ model.compile(loss='categorical_crossentropy', optimizer=Adam(), metrics=['accur
 
 model.summary()
 
-X_train = X_train.reshape(-1, 28, 28, 1)
-X_test = X_test.reshape(-1, 28, 28, 1)
+X_train = X_train.reshape(-1, 32, 32, 3)
+X_test = X_test.reshape(-1, 32, 32, 3)
 
 model.fit(X_train, y_train, batch_size=128, epochs=epochs, verbose=1, validation_split=0.2)
 

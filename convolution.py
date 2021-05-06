@@ -9,6 +9,8 @@ import math
 # From Imports:
 from tensorflow.keras import layers, activations, initializers, regularizers, constraints, Model
 
+from skimage.filters import threshold_otsu
+
 @tf.custom_gradient
 def custom_round(x):
 	output = tf.keras.backend.round(x)
@@ -29,21 +31,21 @@ class CWTConv2D(layers.Layer) :
 	def build(self, input_shape):
 		
 		self.kernel = self.add_weight(name='kernel',
-										   shape=(self.kernel_size[0], self.kernel_size[1], input_shape[-1], self.filters),
-										   initializer=initializers.RandomNormal(mean=0.0, stddev=0.5, seed=0),
-										   trainable=True)
+										shape=(self.kernel_size[0], self.kernel_size[1], input_shape[-1], self.filters),
+										initializer=initializers.RandomNormal(mean=0.0, stddev=0.5, seed=0),
+										trainable=True)
 
 		if (self.use_bias) :							   
 			self.biases = self.add_weight(name='biases',
-											  shape=(self.filters),
-											  initializer='zeros',
-											  trainable=True)
+											shape=(self.filters),
+											initializer='zeros',
+											trainable=True)
 										  
 		super(CWTConv2D, self).build(input_shape)
 										  
 	def call(self, inputs):
 		
-		#inputs = tf.keras.backend.in_train_phase(inputs, tf.keras.backend.round(inputs))
+		inputs = custom_round(inputs)
 		
 		kernel = self.kernel
 		
@@ -77,7 +79,54 @@ class CWTConv2D(layers.Layer) :
 		
 		return ((inputs.shape[0] - self.kernel_size[0])/self.strides[0] + 1, (inputs.shape[1] - self.kernel_size[1])/self.strides[1] + 1, self.filters)
 	
+class SpikeData(layers.Layer) :
+	
+	def __init__(self, **kwargs):
+		super(CWTConv2D, self).__init__(**kwargs)
+		
 
+	def build(self, input_shape):
+										  
+		super(CWTConv2D, self).build(input_shape)
+										  
+	def call(self, inputs):
+
+		output = custom_round(inputs)
+		
+		output = tf.keras.backend.clip(output, 0, 1)
+		
+		return output
+												 
+	def compute_output_shape(self, input_shape):
+		
+		return input_shape.shape
+	
+class CWTMaxPooling2D(layers.Layer) :
+	
+	def __init__(self, pool_size, strides, **kwargs):
+		super(CWTMaxPooling2D, self).__init__(**kwargs)
+		
+		self.pool_size = pool_size
+		self.strides = strides
+		# only supports valid padding
+
+	def build(self, input_shape):
+										  
+		super(CWTMaxPooling2D, self).build(input_shape)
+										  
+	def call(self, inputs):
+		
+		output = custom_round(inputs)
+		
+		output = tf.keras.backend.pool2d(output, pool_size=self.pool_size, strides=self.strides, padding='valid', data_format="channels_last")
+		
+		return output
+												 
+	def compute_output_shape(self, input_shape):
+		
+		return ((inputs.shape[0] - self.pool_size[0])/self.strides[0] + 1, (inputs.shape[1] - self.pool_size[1])/self.strides[1] + 1, self.filters)
+	
+	
 # custom cwt constrain function
 def constrain_weights_cwt(model) :
 
@@ -175,3 +224,35 @@ def print_weights(model) :
 		if 'bias' in name:	
 			print(name + " weights : ")
 			print(weight)
+			
+"""
+takes as input a numpy array of 2d color images, and applies optimal 
+color thresholding to them, transforming them to binary images
+"""
+def opt_thresh_color(x_in):
+
+	x_bin = np.zeros_like(x_in[:,:,:,0])
+	x = np.copy(x_in)
+	for i in np.arange(len(x)):
+		for color in np.arange(3):
+			thresh = threshold_otsu(x[i,:,:,color])
+			x[i,:,:,color] = x[i,:,:,color] > thresh
+		x_bin[i] = np.logical_or(np.logical_or(np.logical_and(x[i,:,:,0],x[i,:,:,1]),
+											   np.logical_and(x[i,:,:,1],x[i,:,:,2])),
+								 np.logical_and(x[i,:,:,0],x[i,:,:,2]))
+
+	return x_bin
+	
+"""
+takes as input a numpy array of 2d color images, and applies optimal 
+color thresholding to them, transforming them to binary images
+"""
+def opt_thresh_color_three(x_in):
+
+	x_bin = np.zeros_like(x_in[:,:,:,0])
+	x = np.copy(x_in)
+	for i in np.arange(len(x)):
+		for color in np.arange(3):
+			thresh = threshold_otsu(x[i,:,:,color])
+			x[i,:,:,color] = x[i,:,:,color] > thresh
+	return x
