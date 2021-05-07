@@ -1,7 +1,7 @@
 from tensorflow.keras.layers import Flatten, Activation, Input, Lambda, concatenate, Dropout, Conv2D
 from tensorflow.keras.datasets import mnist
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.utils import to_categorical, plot_model
 from tensorflow.keras import Model, regularizers
 
 from skimage.filters import threshold_otsu
@@ -17,7 +17,7 @@ from tea import *
 
 ### CHANGE THESE ####
 cwt = False
-dump_weights = True
+dump_weights = False
 ### CHANGE THESE ####
 
 
@@ -72,7 +72,7 @@ else :
 
 flattened_conv = Flatten()(dropout)
 
-lc = Tea(units=120, name='tea_2')(flattened_conv)
+lc = Tea(units=120, name='dense_tea')(flattened_conv)
 
 network = AdditivePooling(10)(lc)
 
@@ -83,6 +83,7 @@ model = Model(inputs=inputs, outputs=predictions)
 model.compile(loss='categorical_crossentropy', optimizer=Adam(), metrics=['accuracy'])
 
 model.summary()
+plot_model(model, to_file='mnist_model.png', show_shapes=True, show_layer_names=True)
 
 X_train = X_train.reshape(-1, 28, 28, 1)
 X_test = X_test.reshape(-1, 28, 28, 1)

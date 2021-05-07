@@ -1,10 +1,11 @@
 from tensorflow.keras.layers import Flatten, Activation, Input, Lambda, concatenate, Dropout, Conv2D, MaxPooling2D
 from tensorflow.keras.datasets import cifar10
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.utils import to_categorical, plot_model
 from tensorflow.keras import Model, regularizers
 
 from skimage.filters import threshold_otsu
+
 
 import numpy as np
 import tensorflow as tf
@@ -39,50 +40,33 @@ inputs = Input(shape=(32,32,3))
 			
 
 if (cwt) :
-	conv1 = CWTConv2D(filters=10,
-					kernel_size=(11,11),
-					strides=(1,1),
-					use_bias=True,
-					)(inputs)
-								
-	pool1 = CWTMaxPooling2D(pool_size=(2,2), strides=(2,2))(conv1)
-	
-	drop1 = Dropout(0.5)(pool1)
-					
-	conv2 = CWTConv2D(filters=20,
-					kernel_size=(5,5),
-					strides=(1,1),
-					use_bias=True,
-					)(pool1)
-					
-	pool2 = CWTMaxPooling2D(pool_size=(2,2), strides=(2,2))(conv2)
-	
-	conv_output = Dropout(0.5)(pool2)
+	conv = CWTConv2D(filters=15,
+						kernel_size=(11,11),
+						strides=(1,1),
+						use_bias=True,
+						)(inputs)
+						
+	pool = CWTMaxPooling2D(pool_size=(2,2), strides=(2,2))(conv)
+					  
+	conv_output = Dropout(0.5)(pool)
 
 else :
-	conv1 = Conv2D(filters=10,
-					kernel_size=(5,5),
+	conv = Conv2D(filters=15,
+					kernel_size=(11,11),
 					strides=(1,1),
 					activation='relu',
 					use_bias=True,
 					)(inputs)
 					
 					
-	pool1 = MaxPooling2D(pool_size=(2,2), strides=(2,2))(conv1)
-					
-	conv2 = Conv2D(filters=20,
-					kernel_size=(3,3),
-					strides=(1,1),
-					activation='relu',
-					use_bias=True,
-					)(pool1)
-					
-	conv_output = MaxPooling2D(pool_size=(2,2), strides=(2,2))(conv2)
+	pool = MaxPooling2D(pool_size=(2,2), strides=(2,2))(conv)
+	
+	conv_output = Dropout(0.5)(pool)
 
 
 flattened_conv = Flatten()(conv_output)
 
-lc = Tea(units=120, name='tea_2')(flattened_conv)
+lc = Tea(units=120, name='dense_tea')(flattened_conv)
 
 network = AdditivePooling(10)(lc)
 
@@ -93,6 +77,7 @@ model = Model(inputs=inputs, outputs=predictions)
 model.compile(loss='categorical_crossentropy', optimizer=Adam(), metrics=['accuracy'])
 
 model.summary()
+plot_model(model, to_file='cifar10_model.png', show_shapes=True, show_layer_names=True)
 
 X_train = X_train.reshape(-1, 32, 32, 3)
 X_test = X_test.reshape(-1, 32, 32, 3)
